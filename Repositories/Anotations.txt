@@ -1,0 +1,10 @@
+﻿IRepository<TEntity> <-- IEntityRepository
+     |                          |
+Repository<TEntity> <-- EntityRepository
+
+IRepository<TEntity> -> Contém o contrato genérico do CRUD
+Repository<TEntity> -> Implementa IRepository<TEntity>
+IEntityRepository -> Interface com o contrato específico de cada entidade que herda de IRepository<TEntity>
+EntityRepository -> Herda de Repository<TEntity> que já tem as ações básicas, e implementa as ações específicas
+definidas na interface especíca [IEntityRepository]
+

@@ -1,0 +1,26 @@
+﻿RoadMap
+
+Gerar token de acesso (IEnumerable<Claim> claims, IConfiguration config)
+{
+	Obter chave do appsettings com o config +
+	Encodificar a chave para bytes +
+	Criar um SigningCredentials -> Assinar Credenciais +
+	{
+		SignCredentials(new SimmetricSecurityKey(chave_codificada), SecurityAlgorithms.HmacSha256Signature)
+	}
+
+	Criar um SecurityTokenDescriptor
+	{
+		Subject = ClaimsIdentity(claims)
+		Expires = DateTime.Utc.Now.AddMinutes(minutos da arquivo de configuração)
+		Audience = audience do arquivo de configuração
+		Issuer = issuer do arquivo de configuração
+		SigningCredentials = signCredentials
+	}
+	Criar um JwtSecurityTokenHandler vazio
+	Criar o token usando o tokenHandler.CreateJwtSecurityToken(tokenDescriptor)
+
+	Retornar o token
+}
+
+
