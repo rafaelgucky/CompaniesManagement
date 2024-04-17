@@ -9,12 +9,18 @@ using API.Pagination;
 using Newtonsoft.Json;
 using API.Pagination.Shared;
 using X.PagedList;
+using Microsoft.AspNetCore.RateLimiting;
+using Asp.Versioning;
 
 
 namespace API.Controllers
 {
-    [Route("[controller]")]
     [ApiController]
+    [ApiVersion("1.0")]
+    [Route("v{version:apiversion}/[controller]")]
+    [Produces("application/json")]
+    //[EnableRateLimiting("fixed")]
+    [ApiConventionType(typeof(DefaultApiConventions))]
     public class ProductsController : ControllerBase
     {
         private readonly IUnitOfWork _unitOfWork;
@@ -29,8 +35,9 @@ namespace API.Controllers
         public async Task<ActionResult<ProductDTO>> CreateAsync(ProductDTO product)
         {
             Product productCreated = _unitOfWork.ProductRepository.Create(_mapper.Map<Product>(product));
+            if (productCreated == null) return BadRequest();
             await _unitOfWork.CommitAsync();
-            return Ok(_mapper.Map<ProductDTO>(productCreated));
+            return new CreatedAtRouteResult("products", new { Id = productCreated.Id }, productCreated);
         }
 
         [HttpGet("pagination")]
@@ -70,13 +77,24 @@ namespace API.Controllers
             return Ok(_mapper.Map<IEnumerable<ProductDTO>>(products));
         }
 
-        [HttpGet("{id:int:min(1)}", Name = "Get")]
+        /// <summary>
+        /// Obtém um objeto do tipo Product com base no id informado
+        /// </summary>
+        /// <param name="id"></param>
+        /// <returns>Um objeto de tipo Product</returns>
+
+        [HttpGet("{id:int:min(1)}", Name = "products")]
         public async Task<ActionResult<ProductDTO>> GetByIdAsync(int id)
         {
             Product? product = await _unitOfWork.ProductRepository.GetAsync(product => product.Id == id);
             if(product is null) return NotFound();
-            return _mapper.Map<ProductDTO>(product);
+            return Ok(_mapper.Map<ProductDTO>(product));
         }
+
+        /// <summary>
+        /// Obtém todos os objetos do tipo Product da base de dados
+        /// </summary>
+        /// <returns>Uma lista de objetos Product</returns>
 
         [HttpGet]
         public async Task<ActionResult<IEnumerable<ProductDTO>>> GetAsync()
@@ -89,18 +107,21 @@ namespace API.Controllers
         public async Task<ActionResult<ProductDTO>> UpdateAsync(int id, ProductDTO product)
         {
             if (id != product.Id) return BadRequest();
-             _unitOfWork.ProductRepository.Update(_mapper.Map<Product>(product));
+            var productUpdated =  _unitOfWork.ProductRepository.Update(_mapper.Map<Product>(product));
+            if (productUpdated == null) return BadRequest();
             await _unitOfWork.CommitAsync();
-            return new CreatedAtRouteResult("Get", new { Id = id }, product);
+            return NoContent();
 
         }
 
         [HttpDelete("{id:int}")]
         public async Task<ActionResult<ProductDTO>> DeleteAsync(int id)
         {
-            Product product = _unitOfWork.ProductRepository.Delete(id);
+            var product = _unitOfWork.CompanyRepository.GetAsync(product => product.Id == id);
+            if (product == null) return NotFound();
+            if (!_unitOfWork.ProductRepository.Delete(id)) return BadRequest();
             await _unitOfWork.CommitAsync();
-            return Ok(_mapper.Map<ProductDTO>(product));
+            return Ok("Deleted");
         }
 
     }

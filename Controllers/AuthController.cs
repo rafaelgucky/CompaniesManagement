@@ -11,8 +11,8 @@ using System.Security.Claims;
 
 namespace API.Controllers
 {
-    [Route("api/[controller]")]
     [ApiController]
+    [Route("api/[controller]")]
     public class AuthController : ControllerBase
     {
         private readonly ITokenService _tokenService;
@@ -20,10 +20,10 @@ namespace API.Controllers
         private readonly RoleManager<IdentityRole> _roleManager;
         private readonly IConfiguration _configuration;
 
-        public AuthController( ITokenService tokenService, 
-            UserManager<ApplicationUser> userManager, 
-            RoleManager<IdentityRole> roleManager, 
-            IConfiguration configuration )
+        public AuthController(ITokenService tokenService,
+            UserManager<ApplicationUser> userManager,
+            RoleManager<IdentityRole> roleManager,
+            IConfiguration configuration)
         {
             _tokenService = tokenService;
             _userManager = userManager;
@@ -33,6 +33,8 @@ namespace API.Controllers
 
         [HttpPost]
         [Route("login")]
+        [ProducesResponseType(StatusCodes.Status200OK)]
+        [ProducesResponseType(StatusCodes.Status401Unauthorized)]
         public async Task<ActionResult> Login([FromBody] LoginModelDTO loginModelDTO)
         {
             /*
@@ -46,10 +48,12 @@ namespace API.Controllers
             {
                 // Obtendo os roles (autorizações) e claims (informações) do usuário
                 var userRoles = await _userManager.GetRolesAsync(user);
+                
                 var authClaims = new List<Claim>
                 {
                     new Claim(ClaimTypes.Name, user.UserName!),
                     new Claim(ClaimTypes.Email, user.Email!),
+                    new Claim("id", user.UserName!),
                     new Claim(JwtRegisteredClaimNames.Jti, Guid.NewGuid().ToString())
                 };
                 userRoles.ToList().ForEach(ur =>
@@ -59,7 +63,7 @@ namespace API.Controllers
 
                 // Criando o token
                 var token = _tokenService.GenerateToken(authClaims, _configuration);
-                
+
                 // Criando o refresh token
                 var refreshToken = _tokenService.GenerateRefreshToken();
 
@@ -87,6 +91,8 @@ namespace API.Controllers
 
         [HttpPost]
         [Route("register")]
+        [ProducesResponseType(StatusCodes.Status200OK)]
+        [ProducesResponseType(StatusCodes.Status400BadRequest)]
         public async Task<ActionResult> Register([FromBody] RegisterModelDTO registerModelDTO)
         {
             var userVerification = await _userManager.FindByNameAsync(registerModelDTO.Name!);
@@ -152,10 +158,12 @@ namespace API.Controllers
         [Authorize]
         [HttpPost]
         [Route("revoke/{userName}")]
+        [ProducesResponseType(StatusCodes.Status400BadRequest)]
+        [ProducesResponseType(StatusCodes.Status204NoContent)]
         public async Task<ActionResult> Revoke(string userName)
         {
             // Revogar um usuário com base no nome
-            
+
             // Obter usuário do banco através do nome
             var user = await _userManager.FindByNameAsync(userName);
 
@@ -169,6 +177,38 @@ namespace API.Controllers
             await _userManager.UpdateAsync(user);
 
             return NoContent();
+        }
+
+        [HttpPost]
+        [Route("CreateRole")]
+        [ProducesResponseType(StatusCodes.Status200OK)]
+        [ProducesResponseType(StatusCodes.Status400BadRequest)]
+        public async Task<ActionResult> CreateRole(string role)
+        {
+            if (await _roleManager.RoleExistsAsync(role)) return BadRequest("Role already exists!");
+
+            IdentityResult result = await _roleManager.CreateAsync(new IdentityRole(role));
+
+            if (!result.Succeeded) return BadRequest("Ocurred an error during creation");
+
+            return Ok("Created");
+        }
+
+        [HttpPost]
+        [Route("connectusertorole")]
+        [ProducesResponseType(StatusCodes.Status200OK)]
+        [ProducesResponseType(StatusCodes.Status400BadRequest)]
+        public async Task<ActionResult> ConnectUserToRole(string userEmail, string roleName)
+        {
+            var user = await _userManager.FindByEmailAsync(userEmail);
+
+            if (user == null) return BadRequest("User not found");
+
+            var result = await _userManager.AddToRoleAsync(user, roleName);
+
+            if (!result.Succeeded) return BadRequest("Unable to connect");
+
+            return Ok("Connected");
         }
     }
 }

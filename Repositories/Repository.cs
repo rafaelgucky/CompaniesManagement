@@ -1,5 +1,4 @@
-﻿
-using API.Data;
+﻿using API.Data;
 using API.Repositories.Interfaces;
 using Microsoft.EntityFrameworkCore;
 using System.Linq.Expressions;
@@ -31,15 +30,16 @@ namespace API.Repositories
 
         public T Update(T entity)
         {
-            _context.Set<T>().Update(entity);
-            return entity;
+            var entityUpdated =_context.Set<T>().Update(entity);
+            return entityUpdated.Entity;
         }
 
-        public T Delete(int id)
+        public bool Delete(int id)
         {
             T? entity = _context.Set<T>().Find(id);
-            _context.Set<T>().Remove(entity);
-            return entity;
+            if (entity == null) return false;
+            var entityDeleted = _context.Set<T>().Remove(entity);
+            return entityDeleted != null;
         }
 
     }

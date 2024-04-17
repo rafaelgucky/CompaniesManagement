@@ -8,6 +8,6 @@ namespace API.Repositories.Interfaces
         Task<T?> GetAsync(Expression<Func<T, bool>> predicate);
         T Create(T entity);
         T Update(T entity);
-        T Delete(int id);
+        bool Delete(int id);
     }
 }

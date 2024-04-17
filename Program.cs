@@ -16,6 +16,11 @@ using Newtonsoft.Json.Linq;
 using System.Diagnostics.Metrics;
 using System.Reflection.Metadata;
 using System.Text;
+using Microsoft.AspNetCore.RateLimiting;
+using System.Threading.RateLimiting;
+using Asp.Versioning;
+using System.Reflection;
+
 //using static System.Net.Mime.MediaTypeNames;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -30,7 +35,29 @@ builder.Services.AddEndpointsApiExplorer();
 // Swagger
 builder.Services.AddSwaggerGen(c =>
 {
-    c.SwaggerDoc("v1", new OpenApiInfo { Title = "Companies", Version = "v1" });
+    //c.SwaggerDoc("v1", new OpenApiInfo { Title = "Companies", Version = "v1" });
+
+    c.SwaggerDoc("v1", new OpenApiInfo
+    {
+        Version = "v1",
+        Title = "CompaniesManagement",
+        Description = "An API for companies management",
+        TermsOfService = new Uri("https://localhost/termsOfServices"),
+        License = new OpenApiLicense
+        {
+            Name = "License",
+            Url = new Uri("https://localhost/license")
+        },
+        Contact = new OpenApiContact
+        {
+            Name = "Rafael",
+            Email = "rafael@gmail.com",
+            Url = new Uri("https://localhost/contact")
+        }
+    });
+
+    string file = $"{Assembly.GetExecutingAssembly().GetName().Name}.xml";
+    c.IncludeXmlComments(Path.Combine(AppContext.BaseDirectory, file));
 
     c.AddSecurityDefinition("Bearer", new OpenApiSecurityScheme()
     {
@@ -107,7 +134,67 @@ builder.Services.AddAuthentication(options =>
 
 builder.Services.AddScoped<ITokenService, TokenService>();
 
+// Authorization
 
+builder.Services.AddAuthorization(options =>
+{
+    options.AddPolicy("AdminMasterOnly", policy => policy.RequireRole("admin").RequireClaim("id", "rafael"));
+    options.AddPolicy("AdminOnly", policy => policy.RequireRole("admin"));
+    options.AddPolicy("Employee", policy => policy.RequireRole("employee"));
+
+});
+
+// CORS
+
+builder.Services.AddCors(options => 
+                          options.AddPolicy("AllowedOrigins",
+                                             policy => policy.WithOrigins("https://wwww.apirequest.io")));
+
+// Rate Limiting
+
+builder.Services.AddRateLimiter(rateOptions =>
+{
+    rateOptions.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
+
+    rateOptions.GlobalLimiter = PartitionedRateLimiter.Create<HttpContext, string>(httpContext =>
+    RateLimitPartition.GetFixedWindowLimiter(httpContext.User.Identity?.Name ?? httpContext.Request.Headers.Host.ToString(), factory => 
+    new FixedWindowRateLimiterOptions
+    {
+        AutoReplenishment = true,
+        PermitLimit = 2,
+        QueueLimit = 0,
+        Window = TimeSpan.FromSeconds(10)
+    }
+    ));
+
+    /*
+    rateOptions.AddFixedWindowLimiter("fixed", options =>
+    {
+        options.PermitLimit = 1;
+        options.Window = TimeSpan.FromSeconds(5);
+        options.QueueLimit = 2;
+        options.QueueProcessingOrder = QueueProcessingOrder.OldestFirst;
+    });
+     
+     */
+});
+
+
+// Versionamento
+
+builder.Services.AddApiVersioning(setupAction =>
+{
+    setupAction.DefaultApiVersion = new ApiVersion(1, 0);
+    setupAction.AssumeDefaultVersionWhenUnspecified = true;
+    setupAction.ReportApiVersions = true;
+    setupAction.ApiVersionReader = ApiVersionReader.Combine(
+        new UrlSegmentApiVersionReader()
+        );
+}).AddApiExplorer(setupAction =>
+{
+    setupAction.GroupNameFormat = "'v'VVV";
+    setupAction.SubstituteApiVersionInUrl = true;
+});
 
 var app = builder.Build();
 
@@ -121,8 +208,16 @@ if (app.Environment.IsDevelopment())
 
 app.UseHttpsRedirection();
 
+app.UseStaticFiles();
+
+app.UseRouting();
+
+app.UseCors();
+
 app.UseAuthorization();
 
 app.MapControllers();
+
+app.UseRateLimiter();
 
 app.Run();

@@ -1,7 +1,6 @@
 ﻿using API.Data;
 using API.Models;
 using API.Pagination;
-using API.Pagination.Shared;
 using API.Repositories.Interfaces;
 using X.PagedList;
 

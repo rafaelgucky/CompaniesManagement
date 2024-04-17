@@ -11,11 +11,16 @@ using AutoMapper;
 using API.Pagination;
 using Newtonsoft.Json;
 using Microsoft.AspNetCore.Authorization;
+using Asp.Versioning;
 
 namespace API.Controllers
 {
     [ApiController]
-    [Route("[controller]")]
+    [ApiVersion("1.0")] 
+    // [ApiVersion("1.0", Deprecated = true)] Difinir versão como depreciada/obsoleta
+    [Route("v{version:apiversion}/[controller]")]
+    [Produces("application/json")]
+    [ApiConventionType(typeof(DefaultApiConventions))]
     public class CompaniesController : ControllerBase
     {
         private readonly ILogger _logger;
@@ -29,7 +34,7 @@ namespace API.Controllers
             _mapper = mapper;
         }
 
-        [HttpGet("Pagination")]
+        [HttpGet("pagination")]
         public async Task<ActionResult<IEnumerable<CompanyDTO>>> GetAsync([FromQuery] CompanyParameters parameters)
         {
             var companies = await _unitOfWork.CompanyRepository.PaginationGetAsync(parameters);
@@ -43,7 +48,7 @@ namespace API.Controllers
                 companies.HasPreviousPage,
             };
             Response.Headers.Append("X-Companies", JsonConvert.SerializeObject(metadata));
-            return _mapper.Map<IEnumerable<CompanyDTO>>(companies).ToList();
+            return Ok(_mapper.Map<IEnumerable<CompanyDTO>>(companies).ToList());
         }
 
         [Authorize]
@@ -51,9 +56,8 @@ namespace API.Controllers
         public async Task<ActionResult<IEnumerable<CompanyDTO>>> GetAsync()
         {
             IEnumerable<Company>? companies = await _unitOfWork.CompanyRepository.GetAsync();
-            if (companies == null) return Ok();
             IEnumerable<CompanyDTO> companiesDTO = _mapper.Map<IEnumerable<CompanyDTO>>(companies);
-            return companiesDTO.ToList();
+            return Ok(companiesDTO.ToList());
         }
 
         [HttpGet("{id:int:min(1)}", Name = "Companies")]
@@ -61,55 +65,36 @@ namespace API.Controllers
         {
             Company? company = await _unitOfWork.CompanyRepository.GetAsync(company => company.Id == id);
             if(company == null) return NotFound();
-            return _mapper.Map<CompanyDTO>(company);
+            return Ok(_mapper.Map<CompanyDTO>(company));
         }
-        /*
-        [HttpGet("{id:int:min(1)}/employees")]
-        public ActionResult<CompanyDTO> GetEmployees(int id)
-        {
-            Company? company = _unitOfWork.CompanyRepository.GetEmployees(id);
-            if (company is null)
-            {
-                return StatusCode(StatusCodes.Status404NotFound);
-            }
-            return company;
 
-        }
-        [HttpGet("{id:int:min(1)}/products")]
-        public ActionResult<CompanyDTO> GetProducts(int id)
-        {
-            Company? company = _unitOfWork.CompanyRepository.GetProducts(id);
-            if (company is null) return NotFound();
-            return company;
-        }
-        */
         [HttpPost]
         public async Task<ActionResult> CreateAsync(CompanyDTO company)
         {
-            _unitOfWork.CompanyRepository.Create(_mapper.Map<Company>(company));
+            var companyCreated = _unitOfWork.CompanyRepository.Create(_mapper.Map<Company>(company));
+            if (companyCreated == null) return BadRequest();
             await _unitOfWork.CommitAsync();
-            return new CreatedAtRouteResult("Companies", new { Id = company.Id }, company);
+            return new CreatedAtRouteResult("Companies", new { Id = companyCreated.Id }, companyCreated);
         }
 
         [HttpPut("{id:int}")]
         public async Task<ActionResult<CompanyDTO>> UpdateAsync(int id, CompanyDTO company)
         {
-            if (id != company.Id)
-            {
-                return BadRequest();
-            }
-            _unitOfWork.CompanyRepository.Update(_mapper.Map<Company>(company));
+            if (id != company.Id) return BadRequest();
+            var companyUpdated = _unitOfWork.CompanyRepository.Update(_mapper.Map<Company>(company));
+            if (companyUpdated == null) return BadRequest();
             await _unitOfWork.CommitAsync();
-            return Ok(company);
+            return NoContent();
         }
 
         [HttpDelete("{id:int}")]
-        public async Task<ActionResult<CompanyDTO>> DeleteAsync(int id)
+        public async Task<ActionResult> DeleteAsync(int id)
         {
-            //Company? company = await _companiesServices.Delete(id);
-            Company? company = _unitOfWork.CompanyRepository.Delete(id);
+            var company = _unitOfWork.CompanyRepository.GetAsync(company => company.Id == id);
+            if(company == null) return NotFound();
+            if(!_unitOfWork.CompanyRepository.Delete(id)) return BadRequest();
             await _unitOfWork.CommitAsync();
-            return Ok(_mapper.Map<CompanyDTO>(company));
+            return Ok("Deleted");
         }
     }
 }
